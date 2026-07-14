@@ -50,7 +50,22 @@
 - **辅助接口**：`mtop.trip.flight.calendar.cheapest` v2.0（低价日历）、`mtop.trip.tfsug.card.inter.city.suggest`（城市联想）——两者风控宽松，海外 IP 也能过。
 - **风控结论**：`listingsearch` 风控严格，海外数据中心 IP（本机 Vultr TUN 全局代理出口）直接被 `RGV587_ERROR::SM` 滑块惩罚，连真实 Chrome 打开列表页都被拦 → **必须国内 IP 直连阿里系域名**（`*.taobao.com / *.fliggy.com / *.alicdn.com / *.mmstat.com` 走 DIRECT）。用户已确认在代理客户端加直连规则。
 
-**待验证**（直连规则生效后）：国内 IP 下匿名 requests 能否稳定调通 listingsearch；不行则依次尝试真实浏览器 Cookie 复用 / Playwright 兜底。
+**风控深入结论（2026-07-15 追加）**：
+
+- listingsearch 的拦截**不只是 IP**，还叠加**反爬指纹**：返回 `RGV587_ERROR::SM` + `.../punish?x5secdata=...` 滑块惩罚 URL。
+- 实测在**确认过的国内 IPv6 出口**（240e 广州电信 / 2401:b180 阿里 IPv6）下，纯 requests 匿名会话仍被 RGV587 挑战；用**真实 Chrome（Playwright headful）**打开官方 H5 列表页也停在飞猪「抱歉出错了」错误页（其内部 listingsearch 同样被 punish）。
+- 根因：阿里 mtop 需要页面加载时其**反爬 JS SDK 运行后生成的 `x5sec` 令牌**（配合 `cna/umid` 等）。纯 Python `requests` 不执行该 JS，拿不到令牌 → 必被挑战；全新无 Cookie 的浏览器会话同样会被挑战（低风险场景浏览器 JS 会自动过，但需真实环境）。
+- 本机网络限制加剧问题：IPv4 全量经路由器 TUN 出口到 Vultr（美国机房 IP，被阿里判高风险）；代理在**路由器（网关 192.168.50.1）**上，PC 端无代理进程、改不动其分流规则。`market.m.taobao.com`（SPA 页所在域）**无 IPv6**，无法用 IPv6 绕过。
+
+**技术选型的现实推论**：
+
+- 「纯接口 requests」路线**不可行**（拿不到 x5sec，稳定被风控），除非引入完整反爬令牌生成（成本高、易碎）。
+- 可行路线＝**真实浏览器执行环境**：安卓端用 **WebView 加载官方飞猪 H5 机票页**，让阿里反爬 JS 自然生成令牌，再从中**拦截 listingsearch 的响应 JSON**（页面自己发的请求，我们只读结果）→ 复用 §17 数据结构。这与本机是否被风控无关：**用户手机在真实国内移动网络下访问，天然低风险、可自动过反爬**。
+- PC 端验证/使用需要 taobao/fliggy 域名走**国内住宅 IP 直连**（非 Vultr）；当前受路由器分流所限暂时无法从本机跑通端到端，**待用户决定网络方案**（见下）。
+
+**待用户决定（阻塞项）**：
+1. 路由器上给 `*.taobao.com / *.fliggy.com / *.alicdn.com / *.mmstat.com` 加**直连（走国内线路）** —— 需路由器后台访问权限，可由用户操作或提供机型/固件由 Claude 指导。
+2. 或先以**安卓 App（真机真实国内网络）为首要目标**：架构改为「WebView 加载官方 H5 页 + 拦截接口响应」，PC 端验证延后到有国内直连后再补。
 
 ---
 
