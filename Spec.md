@@ -40,6 +40,18 @@
 
 > 飞猪属阿里系，接口带 mtop 签名与风控；具体抓取方式（纯接口 / 浏览器自动化 / 是否需登录 Cookie）待技术验证后敲定并回填本节。
 
+### 3.1 飞猪接口技术验证（2026-07-15 进行中）
+
+**已确认**：
+
+- **mtop H5 签名流程**：`h5api.m.taobao.com/h5/<api>/<ver>/`，首次请求获取 `_m_h5_tk` cookie，签名 = `md5(token&t&appKey&data)`，appKey `12574478`；**匿名即可，无需登录**。
+- **核心接口**：`mtop.trip.interflight.listingsearch` v2.3（国际线列表搜索，POST，`needLogin:false`）。**轮询协议**：响应含 `needContinue / nextWaitTime / uniqKey / pollCount`，需带 `uniqKey` 递增 `pollCount` 反复请求直至 `needContinue=false`，结果在 `data.items`。
+- **请求参数**（从页面 JS `rx-iflight-eco/1.19.47` 提取）：`tripType`（单程/往返）、`leaveDate/backDate`、`depCityCode/arrCityCode`（城市三字码）、`depCityName/arrCityName`、`adultPassengerNum` 等乘客数、`cabinClassFilter`（`Y`=经济舱/`S/C/F/YS/FC`）、`showTaxPrice`、`sortBy`、`filters`；往返模式改用 `searchSegments` 段列表。
+- **辅助接口**：`mtop.trip.flight.calendar.cheapest` v2.0（低价日历）、`mtop.trip.tfsug.card.inter.city.suggest`（城市联想）——两者风控宽松，海外 IP 也能过。
+- **风控结论**：`listingsearch` 风控严格，海外数据中心 IP（本机 Vultr TUN 全局代理出口）直接被 `RGV587_ERROR::SM` 滑块惩罚，连真实 Chrome 打开列表页都被拦 → **必须国内 IP 直连阿里系域名**（`*.taobao.com / *.fliggy.com / *.alicdn.com / *.mmstat.com` 走 DIRECT）。用户已确认在代理客户端加直连规则。
+
+**待验证**（直连规则生效后）：国内 IP 下匿名 requests 能否稳定调通 listingsearch；不行则依次尝试真实浏览器 Cookie 复用 / Playwright 兜底。
+
 ---
 
 ## 4. 功能规格
