@@ -52,7 +52,18 @@
 - **辅助接口**：`mtop.trip.flight.calendar.cheapest` v2.0（低价日历）、`mtop.trip.tfsug.card.inter.city.suggest`（城市联想）——两者风控宽松，海外 IP 也能过。
 - **风控结论**：`listingsearch` 风控严格，海外数据中心 IP（本机 Vultr TUN 全局代理出口）直接被 `RGV587_ERROR::SM` 滑块惩罚，连真实 Chrome 打开列表页都被拦 → **必须国内 IP 直连阿里系域名**（`*.taobao.com / *.fliggy.com / *.alicdn.com / *.mmstat.com` 走 DIRECT）。用户已确认在代理客户端加直连规则。
 
-**风控深入结论（2026-07-15 追加）**：
+**⭐ 根本结论修正（2026-07-15 二次验证）——需要登录，而非风控/代理**：
+
+- 用户反馈「手动 Chrome 能看到飞猪机票」+ 网络排查确认：访问国内目标时出口是**真实国内住宅 IP**（183.34.170.90 广东电信直连），只有访问国外 IP（如 api.ipify）才走 Vultr。**网络没问题**，路由器只代理国外地址。
+- 真正原因＝**飞猪国际机票搜索结果需要淘宝登录**。实测用真实 Chrome（CDP 接管、全新配置）驱动 PC 国际机票页 `www.fliggy.com/ijipiao/` 搜索「上海→东京」，结果页跳转 `market.m.taobao.com/.../listing` 后**重定向到 `login.taobao.com` 二维码登录页**。此前的 `RGV587` 也是**未登录态**下的表现，而非机房 IP。
+- 首页「特价航线」列表（往返报价）**无需登录可见**，但**点进具体搜索结果必须登录**。用户手动 Chrome 能看＝其浏览器**已登录淘宝**。
+- **PC 站可用**：`www.fliggy.com/jipiao/`（国内）与 `www.fliggy.com/ijipiao/`（国际/港澳台，含单程/往返/多程）页面完整加载、表单可驱动、未被风控——只差登录态。
+
+**架构含义**：与 EventNote 完全同构——需**用户自己的登录态**。安卓 App 用 **WebView 扫码/密码登录淘宝**取得会话，再加载机票列表页（此时不再跳登录）→ 拦截 `listingsearch` 响应。登录 cookie 存本地私有目录（同 EventNote `cookie.txt` 模式）。这也解释了为何 §3.1 早前纯 requests 匿名调用必被 `RGV587`。
+
+---
+
+**（历史记录）风控深入结论（2026-07-15 追加，后被上方「需登录」结论修正）**：
 
 - listingsearch 的拦截**不只是 IP**，还叠加**反爬指纹**：返回 `RGV587_ERROR::SM` + `.../punish?x5secdata=...` 滑块惩罚 URL。
 - 实测在**确认过的国内 IPv6 出口**（240e 广州电信 / 2401:b180 阿里 IPv6）下，纯 requests 匿名会话仍被 RGV587 挑战；用**真实 Chrome（Playwright headful）**打开官方 H5 列表页也停在飞猪「抱歉出错了」错误页（其内部 listingsearch 同样被 punish）。
