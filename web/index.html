@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CheapestFlight · 廉价机票</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">✈️ CheapestFlight</div>
+    <div class="sub">飞猪 · 廉价机票比价</div>
+  </header>
+
+  <div id="loginBanner" class="banner hidden">
+    <span>⚠️ 尚未登录淘宝，无法获取搜索结果。</span>
+    <button id="loginBtn">打开登录</button>
+    <span class="banner-note">在弹出的浏览器窗口扫码登录后，回来点搜索。</span>
+  </div>
+
+  <section class="searchbar">
+    <div class="field">
+      <label>出发地</label>
+      <input id="dep" list="cities" placeholder="城市名 / 三字码" autocomplete="off" value="北京">
+    </div>
+    <button id="swap" title="交换" class="swap">⇄</button>
+    <div class="field">
+      <label>到达地</label>
+      <input id="arr" list="cities" placeholder="城市名 / 三字码" autocomplete="off" value="杭州">
+    </div>
+    <div class="field">
+      <label>出发日期</label>
+      <input id="date" type="date">
+    </div>
+    <button id="searchBtn" class="search">搜索</button>
+    <datalist id="cities"></datalist>
+  </section>
+
+  <section id="controls" class="controls hidden">
+    <div class="sorts">
+      <span class="ctl-label">排序</span>
+      <button class="sort" data-key="dep">出发时间<i></i></button>
+      <button class="sort" data-key="arr">到达时间<i></i></button>
+      <button class="sort active" data-key="price">价格<i>↑</i></button>
+      <button class="sort" data-key="dur">飞行时间<i></i></button>
+    </div>
+    <div class="filters">
+      <span class="ctl-label">筛选</span>
+      <button class="filt active" data-f="all">全部</button>
+      <button class="filt" data-f="direct">仅直飞</button>
+      <button class="filt" data-f="transfer">仅中转</button>
+    </div>
+    <div id="summary" class="summary"></div>
+  </section>
+
+  <main id="results" class="results"></main>
+  <div id="status" class="status"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

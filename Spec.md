@@ -182,14 +182,20 @@
 
 ```
 CheapestFlight/
-├─ app.py            # 后端入口：启动服务 + 自动开浏览器
-├─ sources/          # 数据源实现（fliggy.py 为首个，统一接口）
-├─ store.py          # SQLite 读写：filter / 收藏 / 价格快照
-├─ web/              # 前端单页（index.html / app.js / style.css）
-├─ data.db           # SQLite（filter / 收藏 / 价格历史）
-├─ android/          # 安卓 Gradle 工程（Chaquopy 打包）
+├─ app.py            # 后端入口：Flask 服务 + 自动开浏览器（已实现，§9）
+├─ cities.py         # 城市名↔飞猪三字码映射（已实现）
+├─ sources/
+│   ├─ fliggy.py     # 驱动登录态 Chrome + 拦截 listingsearch（已实现，§9）
+│   └─ parse.py      # listingsearch 响应 → 归一化航班对象（已实现，§8）
+├─ store.py          # SQLite：filter / 收藏 / 价格快照（F2/F3，待实现）
+├─ web/              # 前端单页 index.html / app.js / style.css（F1 已实现，§9）
+├─ requirements.txt  # flask + playwright
+├─ samples/          # 飞猪响应样本（本地开发参考，gitignore 不入库）
+├─ android/          # 安卓抓取骨架工程（§7，次要）
 └─ Spec.md           # 本规格说明
 ```
+
+> 登录态数据不在仓库内：持久化 Chrome 用户目录默认在 `~/.cheapestflight/chrome_profile`（env `CHEAPESTFLIGHT_PROFILE` 可改），用户首次经 App「打开登录」在弹出的 Chrome 里扫码登录，cookie 自然持久（同 EventNote cookie 思路）。
 
 ---
 
@@ -333,3 +339,42 @@ data
 **F1 卡片 + 四种排序 + 直飞/中转筛选，全部可由单次 `listingsearch` 响应实现**。价格单位为分需 ÷100；耗时为分钟；直飞/中转看 `itemType`。国际线待后续捕获一次 `interflight.listingsearch` 确认差异（结构同族，预计仅多币种/中转更多）。
 
 **下一步**：进入正式功能开发——按 §8 字段做前端卡片渲染 + 四种排序 + 直飞/中转筛选（F1），再叠加 F2 保存 filter、F3 收藏+价格追踪。抓取层复用「WebView 拦截 listingsearch 响应」这套已验证机制。
+
+---
+
+## 9. PC 版 F1 实现（2026-07-15 完成并端到端实测通过）
+
+**架构落地**（SPEC §3.3 修正后的 PC 优先路线）：本地 Flask 服务 + 一个持久化「登录态」Chrome（Playwright 驱动）。用户打开本地网页搜索，后端驱动登录态 Chrome 导航飞猪机票列表页、拦截 `listingsearch` 响应，解析为自家卡片渲染。
+
+### 9.1 组成
+
+| 文件 | 职责 |
+| --- | --- |
+| [app.py](app.py) | Flask：托管前端；`/api/cities`、`/api/login-status`、`/api/login`(POST)、`/api/search`；启动自动开浏览器到 `http://127.0.0.1:8770` |
+| [sources/fliggy.py](sources/fliggy.py) | 单 worker 线程持有 Playwright 持久化上下文（`launch_persistent_context`，headful，移动 UA）；`search()` 导航列表深链并拦截 `listingsearch`（含轮询：等 `needContinue` 结束取 items 最多的响应）；`check_login()` / `open_login()`；响应体 gzip/zlib/br 稳健解压 |
+| [sources/parse.py](sources/parse.py) | 按 §8 把 `items[]` 里 `FLIGHT_DIRECT/FLIGHT_TRANSFER` 解析为归一化航班（起降机场/时间、跨天、耗时、价格元、航段、中转地、航司） |
+| [cities.py](cities.py) | 城市名↔三字码映射（含 `intl` 标记，决定走国内 `rx-flight-eco` 还是国际 `rx-iflight-eco` 列表页）；也接受直接输入三字码 |
+| [web/](web/) | 单页前端：搜索表单（城市 datalist 联想）+ 卡片 + **四种排序**（出发/到达/价格/飞行时间，升降切换）+ **直飞/中转筛选** + 未登录横幅 |
+
+### 9.2 实测结果（北京→杭州 2026-07-16）
+
+- 登录态检测 `logged_in:true` → `/api/search` 驱动 Chrome 抓到 **52 个航班**（42 直飞 / 10 中转），`lowestPrice` 与卡片一致。
+- 卡片正确显示：大兴/首都 T2/T3（多机场区分）、起降时间、跨天 `+1天`、总耗时（中转含等待，如 15h15m）、直飞(绿)/中转N·中转地(橙) 徽标、航司航班号、价格 + 含税估算。
+- 四种排序、直飞/中转筛选均正确（前端本地排序/过滤，字段现成，含到达时间与飞行时间——飞猪服务端本不提供这两种排序）。
+
+### 9.3 运行
+
+```bash
+pip install -r requirements.txt && python -m playwright install chromium   # 首次
+python app.py     # 自动开 http://127.0.0.1:8770
+```
+
+首次未登录：页面顶部「打开登录」→ 弹出的 Chrome 扫码登录淘宝 → 回来搜索。登录态持久（`~/.cheapestflight/chrome_profile`）。
+
+### 9.4 F1 待补 / 下一步
+
+- **往返（Q6）**：当前 `tripType=0` 单程已通；往返照搬飞猪两步流程（去程列表→选中出返程）待接。
+- **国际线**：城市映射已含国际；`rx-iflight-eco` + `interflight.listingsearch` 路径已就绪，待一次国际实测校字段差异。
+- **礼貌节流 / 反爬升级应对**：请求间隔 + 真遇验证在弹出的 Chrome 里手动过。
+- 之后：**F2 保存的 filter**、**F3 收藏+价格追踪**（引入 `store.py` SQLite）。
+- 安卓端（§7 骨架）复用同一 `parse.py` 与前端，改由 WebView 拦截喂数据（次要，延后）。

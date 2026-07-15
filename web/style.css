@@ -1,0 +1,73 @@
+* { box-sizing: border-box; }
+:root {
+  --bg: #f2f4f7; --card: #fff; --ink: #1a2029; --muted: #8a94a4;
+  --brand: #1E88E5; --brand2: #42A5F5; --line: #e7ebf0;
+  --direct: #16a34a; --transfer: #d97706; --price: #e5442f;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#0f1216; --card:#171b21; --ink:#e6e9ee; --muted:#8a94a4; --line:#252b33; }
+}
+body { margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--ink); font-size:14px; }
+
+.topbar { display:flex; align-items:baseline; gap:12px; padding:14px 20px;
+  background:linear-gradient(135deg,var(--brand),var(--brand2)); color:#fff; }
+.topbar .brand { font-size:19px; font-weight:700; }
+.topbar .sub { font-size:12px; opacity:.9; }
+
+.banner { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  background:#fff7ed; color:#9a3412; padding:10px 20px; border-bottom:1px solid #fed7aa; }
+.banner button { background:#ea580c; color:#fff; border:0; border-radius:8px; padding:6px 14px; cursor:pointer; }
+.banner-note { font-size:12px; color:#c2712c; }
+
+.searchbar { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap;
+  padding:16px 20px; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+.field { display:flex; flex-direction:column; gap:4px; }
+.field label { font-size:12px; color:var(--muted); }
+.field input { border:1px solid var(--line); background:var(--bg); color:var(--ink);
+  border-radius:9px; padding:9px 12px; font-size:15px; min-width:130px; }
+.field input:focus { outline:2px solid var(--brand); border-color:transparent; }
+.swap { align-self:center; margin-bottom:4px; background:var(--bg); border:1px solid var(--line);
+  color:var(--brand); border-radius:50%; width:34px; height:34px; cursor:pointer; font-size:16px; }
+.search { background:linear-gradient(135deg,var(--brand),var(--brand2)); color:#fff; border:0;
+  border-radius:10px; padding:11px 26px; font-size:15px; font-weight:600; cursor:pointer; height:40px; }
+.search:disabled { opacity:.6; cursor:default; }
+
+.controls { display:flex; align-items:center; gap:20px; flex-wrap:wrap; padding:12px 20px;
+  background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:73px; z-index:4; }
+.ctl-label { font-size:12px; color:var(--muted); margin-right:6px; }
+.sorts,.filters { display:flex; align-items:center; gap:6px; }
+.sort,.filt { background:var(--bg); border:1px solid var(--line); color:var(--ink);
+  border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px; }
+.sort.active,.filt.active { background:var(--brand); color:#fff; border-color:var(--brand); }
+.sort i { font-style:normal; margin-left:3px; font-size:11px; }
+.summary { margin-left:auto; font-size:13px; color:var(--muted); }
+.summary b { color:var(--price); font-size:15px; }
+
+.results { padding:16px 20px; display:flex; flex-direction:column; gap:12px; max-width:900px; margin:0 auto; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+  display:flex; align-items:center; gap:18px; }
+.card .leg { display:flex; align-items:center; gap:14px; flex:1; }
+.time { text-align:center; min-width:74px; }
+.time .t { font-size:22px; font-weight:700; letter-spacing:.5px; }
+.time .ap { font-size:12px; color:var(--muted); margin-top:2px; white-space:nowrap; }
+.mid { flex:1; text-align:center; }
+.mid .dur { font-size:12px; color:var(--muted); }
+.mid .bar { height:2px; background:var(--line); position:relative; margin:6px 0; border-radius:2px; }
+.mid .bar::after { content:"✈"; position:absolute; right:-2px; top:-9px; font-size:12px; color:var(--brand); }
+.mid .badge { font-size:12px; font-weight:600; }
+.mid .badge.direct { color:var(--direct); }
+.mid .badge.transfer { color:var(--transfer); }
+.cross { color:var(--price); font-size:11px; vertical-align:super; margin-left:2px; }
+.airlines { min-width:120px; font-size:12px; color:var(--muted); }
+.airlines .no { color:var(--ink); font-weight:600; }
+.price { text-align:right; min-width:96px; }
+.price .p { color:var(--price); font-size:22px; font-weight:700; }
+.price .p small { font-size:13px; }
+.price .tax { font-size:11px; color:var(--muted); }
+
+.status { text-align:center; color:var(--muted); padding:24px; }
+.hidden { display:none !important; }
+.spin { display:inline-block; width:16px; height:16px; border:2px solid var(--line);
+  border-top-color:var(--brand); border-radius:50%; animation:sp .7s linear infinite; vertical-align:-3px; margin-right:6px; }
+@keyframes sp { to { transform:rotate(360deg); } }
