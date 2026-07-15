@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 抓取到的 JSON 存在 app 专属外部目录，可经 FileProvider 分享，也可用文件管理器查看 -->
+    <external-files-path name="captures" path="captures/" />
+    <files-path name="internal" path="." />
+</paths>

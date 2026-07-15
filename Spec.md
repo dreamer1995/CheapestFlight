@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 名称 | CheapestFlight（最廉价航空票价抓取，网页版 + 安卓 App） |
-| 版本 | v0.1 · 需求记录阶段（尚未实现） |
+| 版本 | v0.1 · 骨架阶段（安卓「WebView + 拦截」抓取骨架已实现并出 APK，见 §7；正式功能待真机捕获响应后开发） |
 | 定稿日期 | 2026-07-14（初稿，含待讨论项） |
 
 > **协作约定**：每个和用户敲定的功能都必须写入本 SPEC；今后每次敲定的功能修改都要**同步更新 SPEC 并提交 git**。
@@ -191,9 +191,11 @@ CheapestFlight/
 
 ## 6. 安卓打包与发布（沿用 EventNote++ §22 已验证流程）
 
-**方案**：Chaquopy——APK 内嵌 Python 运行时，`MainActivity` 后台线程启动 Flask（`start_server`）→ 轮询就绪 → 全屏 WebView 加载 `http://127.0.0.1:<port>`。Python 源码与 `web/` 由构建任务 `syncPySources` 自动从仓库根同步进 APK（单一代码源，改完直接重新 assemble）。
+> **骨架阶段现状（2026-07-15）**：因架构改为「WebView 加载飞猪官方页 + 拦截接口响应」（§3.3），**骨架 App 不含 Chaquopy/Python/Flask**——是纯原生 Kotlin WebView（见 §7）。本节描述的 Chaquopy 方案保留给「正式功能需本地 SQLite/后端逻辑」时启用；若最终纯前端（IndexedDB 存 filter/收藏）也可能一直不需要 Chaquopy。
 
-**工程参数**（照搬已验证组合）：AGP 7.4.2 + Kotlin 1.8.22 + Chaquopy 16.1，Python 3.11，仅 arm64，minSdk 26 / targetSdk 33。
+**方案（正式功能若需后端时）**：Chaquopy——APK 内嵌 Python 运行时，`MainActivity` 后台线程启动 Flask（`start_server`）→ 轮询就绪 → 全屏 WebView 加载 `http://127.0.0.1:<port>`。Python 源码与 `web/` 由构建任务 `syncPySources` 自动从仓库根同步进 APK（单一代码源，改完直接重新 assemble）。
+
+**工程参数**：AGP 7.4.2 + Kotlin 1.8.22，仅 arm64，minSdk 26 / targetSdk 33（骨架用此组合已构建成功；Chaquopy 16.1 / Python 3.11 待启用后加入）。
 
 **已知要点**（EventNote 踩坑继承）：
 
@@ -225,3 +227,44 @@ cd android
 - tag：`v<版本>-android-alphaN`（target=main），`prerelease: true`；资产名：`CheapestFlight-android-alphaN-arm64.apk`。
 - 凭据复用 git 凭据管理器，REST API 两步（建 Release → 传 APK）；发布 JSON 一律写临时文件后 `--data-binary @file` 传给 curl（内联中文 JSON 在 Git Bash 传参会出错）。
 - 手机端直接打开 Release 页下载安装。
+
+---
+
+## 7. 抓取骨架 App（v0.1，2026-07-15 已实现并构建成功）
+
+**目的**：验证「真实 WebView 加载飞猪官方机票页 + 拦截接口响应」这条路（§3.3），并在真机上抓取一份真实搜索响应，用于最终确定卡片字段结构（§3.2 待办）。
+
+**形态**：纯原生 Kotlin 单 Activity WebView，**无 Python/Flask/Chaquopy**。APK 仅约 3MB。
+
+**工程位置**：[android/](android/)
+
+```
+android/
+├─ settings.gradle / build.gradle / gradle.properties / local.properties
+├─ gradlew(.bat) + gradle/wrapper/…        # 复用 EventNote 的 wrapper（gradle 7.6.4）
+└─ app/
+   ├─ build.gradle                         # com.android.application + kotlin + androidx.webkit:1.7.0
+   └─ src/main/
+      ├─ AndroidManifest.xml               # 单 MainActivity + FileProvider（分享抓取文件）
+      ├─ assets/home.html                  # 应用内启动页：列出飞猪机票入口 + 使用步骤
+      ├─ res/…                             # 蓝底白纸飞机图标、strings、file_paths
+      └─ java/com/dreamer/cheapestflight/MainActivity.kt
+```
+
+**核心机制**（`MainActivity.kt`）：
+
+- **UA**：移动端 Chrome（`Chrome/120 … Mobile`），拿到移动版 H5 机票页（数据走待拦截的网关）。
+- **拦截钩子**：`WebViewCompat.addDocumentStartJavaScript` 在**页面脚本执行前**注入 JS，包装 `fetch` 与 `XMLHttpRequest`；命中 `listingsearch / interflight / serverless.api.gateway / flight.calendar` 的响应即经 `@JavascriptInterface`（`window.CF.onCapture`）回传原生。
+- **落盘**：每条命中响应存为 `getExternalFilesDir/captures/<tag>_<时间>.json`（信封含 `url/capturedAt/body`）；顶栏「已抓取 N」计数 + Toast。
+- **分享**：顶栏「分享」用 `FileProvider` 把最近一份抓取 JSON 经系统分享发出（无需存储权限）。
+- **登录**：WebView 持久化 Cookie；未登录访问机票页会自然跳淘宝登录，用户扫码/密码登录后即带登录态搜索。
+- **健壮性**：① 挂默认 `WebChromeClient`（否则 JS 弹窗/二维码被吞）；② 屏蔽 `X-Requested-With` 头（避免被识别为嵌入式 WebView）；③ `shouldOverrideUrlLoading` 拦掉 `tbopen:// / taobao:// / alipays://` 等唤起原生 App 的深链，强制留在 WebView。
+
+**构建**（已实测成功，产物 `android/app/build/outputs/apk/debug/app-debug.apk`）：
+
+```bash
+export JAVA_HOME="E:\Software\Android\Android Studio\jre"
+cd android && ./gradlew.bat :app:assembleDebug --no-daemon
+```
+
+**下一步**：用户真机安装 → 登录 → 搜一次国际机票 → 顶栏计数 +1 → 分享抓到的 JSON 回传 → 据此回填 §7 数据字段与卡片映射，进入排序/筛选/收藏正式功能开发。

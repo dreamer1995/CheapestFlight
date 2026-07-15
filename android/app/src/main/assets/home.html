@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>CheapestFlight 骨架</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background:#f4f6f8; color:#1a1a1a; padding:20px; }
+  @media (prefers-color-scheme: dark){ body{ background:#111; color:#eee; } .card{ background:#1c1c1e !important; } }
+  h1 { font-size:20px; margin:8px 0 4px; }
+  .sub { color:#888; font-size:13px; margin-bottom:18px; line-height:1.5; }
+  .card { display:block; background:#fff; border-radius:14px; padding:18px 20px; margin-bottom:14px;
+          text-decoration:none; color:inherit; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  .card .t { font-size:17px; font-weight:600; }
+  .card .d { font-size:13px; color:#888; margin-top:4px; }
+  .primary { background:linear-gradient(135deg,#1E88E5,#42A5F5); color:#fff; }
+  .primary .d { color:rgba(255,255,255,.85); }
+  .steps { font-size:13px; color:#777; line-height:1.7; margin-top:18px;
+           background:rgba(30,136,229,.08); border-radius:12px; padding:14px 16px; }
+  .steps b { color:#1E88E5; }
+</style>
+</head>
+<body>
+  <h1>✈️ CheapestFlight · 抓取骨架</h1>
+  <div class="sub">用于验证「WebView 加载飞猪 + 拦截航班接口」这条路，并抓取一份真实搜索响应用于确定卡片字段。</div>
+
+  <a class="card primary" href="https://h5.m.taobao.com/trip/traffic-search/search/index.html?defaultBiz=flight">
+    <div class="t">🌏 机票搜索（国际 / 国内）</div>
+    <div class="d">飞猪官方搜索页 · 未登录会先跳淘宝登录</div>
+  </a>
+
+  <a class="card" href="https://www.fliggy.com/ijipiao/">
+    <div class="t">🛫 国际机票（网页版入口）</div>
+    <div class="d">备用入口：中国港澳台 / 国际机票</div>
+  </a>
+
+  <a class="card" href="https://m.fliggy.com/">
+    <div class="t">🐷 飞猪手机首页</div>
+    <div class="d">兜底：从首页里点「机票」进入</div>
+  </a>
+
+  <div class="steps">
+    <b>使用步骤</b><br>
+    1. 点上面任一入口，未登录先完成<b>淘宝扫码/密码登录</b>；<br>
+    2. 输入出发/到达城市和日期，正常搜索机票；<br>
+    3. 出结果后，顶栏「已抓取 N」会自动<b>+1</b>；<br>
+    4. 点顶栏 <b>分享</b> 把抓到的 JSON 发出来即可。
+  </div>
+</body>
+</html>

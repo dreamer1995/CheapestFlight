@@ -1,0 +1,15 @@
+# Android build artifacts
+android/build/
+android/app/build/
+android/.gradle/
+android/.idea/
+android/*.iml
+android/app/*.iml
+*.apk
+
+# Scratch / captures
+captures/
+
+# OS
+Thumbs.db
+.DS_Store

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 前景：白色纸飞机（廉价机票抓取工具） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="0.62" android:scaleY="0.62"
+        android:pivotX="54" android:pivotY="54">
+        <!-- 纸飞机主体 -->
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M22,54 L86,30 L60,82 L52,62 Z" />
+        <!-- 机翼折痕（浅色区分） -->
+        <path android:fillColor="#BBDEFB"
+            android:pathData="M52,62 L86,30 L58,58 Z" />
+    </group>
+</vector>
