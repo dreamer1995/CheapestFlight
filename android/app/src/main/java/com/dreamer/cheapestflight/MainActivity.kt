@@ -51,15 +51,16 @@ class MainActivity : AppCompatActivity() {
         const val UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
-        // 在页面自身脚本执行前注入：包装 fetch 与 XMLHttpRequest，命中航班接口即上报原文
+        // 在页面自身脚本执行前注入：包装 fetch 与 XMLHttpRequest，命中飞猪 trip 接口即上报原文。
+        // 放宽到所有 mtop.trip.* 接口（含 listingsearch / 网关 / 日历等），避免漏掉真正的航班数据；
+        // 配置类噪声由「分享全部」合并后在电脑端甄别。
         const val HOOK_JS = """
 (function(){
   if (window.__cfHookInstalled) return; window.__cfHookInstalled = true;
   function want(u){ try{ u = String(u||''); }catch(e){ return false; }
-    return u.indexOf('listingsearch') >= 0
-        || u.indexOf('interflight') >= 0
-        || u.indexOf('serverless.api.gateway') >= 0
-        || u.indexOf('flight.calendar') >= 0; }
+    return u.indexOf('/h5/mtop.trip.') >= 0
+        || u.indexOf('listingsearch') >= 0
+        || u.indexOf('interflight') >= 0; }
   function report(u, body){ try{ if(window.CF && body) window.CF.onCapture(String(u), String(body)); }catch(e){} }
   // fetch
   if (window.fetch){
@@ -189,20 +190,23 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val dir = File(getExternalFilesDir(null), "captures").apply { mkdirs() }
                     val ts = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
-                    val tag = when {
-                        url.contains("listingsearch") -> "listingsearch"
-                        url.contains("serverless.api.gateway") -> "gateway"
-                        url.contains("calendar") -> "calendar"
-                        else -> "flight"
-                    }
-                    val f = File(dir, "${tag}_$ts.json")
+                    // 依据 body 内容判断是否像航班数据（航班号/起降时间/舱位/航段等）
+                    val looksFlight = body.length > 4000 || Regex(
+                        "flightNo|depTime|arrTime|arrAirport|depAirport|cabinClass|airlineName|" +
+                        "segmentList|flightList|itemList|stopCity|\"flights\"|\"items\""
+                    ).containsMatchIn(body)
+                    val api = Regex("/h5/([^/]+)/").find(url)?.groupValues?.get(1) ?: "unknown"
+                    val kind = if (looksFlight) "FLIGHT" else "cfg"
+                    val f = File(dir, "${kind}_${api}_$ts.json")
                     // 存一个带元信息的信封，便于回溯是哪个接口
-                    f.writeText("{\"url\":${jsonStr(url)},\"capturedAt\":\"$ts\",\"body\":${jsonStr(body)}}")
+                    f.writeText("{\"url\":${jsonStr(url)},\"capturedAt\":\"$ts\",\"kind\":\"$kind\",\"body\":${jsonStr(body)}}")
                     runOnUiThread {
                         captureCount++
                         countLabel.text = "已抓取 $captureCount"
-                        Toast.makeText(this@MainActivity,
-                            "抓到 $tag 响应 ✓（$captureCount）", Toast.LENGTH_SHORT).show()
+                        if (looksFlight) {
+                            Toast.makeText(this@MainActivity,
+                                "★ 抓到疑似航班数据 ✓（$captureCount）", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 } catch (e: Exception) {
                     runOnUiThread {
@@ -214,23 +218,38 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** 把最近一次抓取的 JSON 通过系统分享发出去 */
+    /** 把本次抓取的全部响应合并成一个 JSON 文件分享出去（不再只发最新一条） */
     private fun shareLatestCapture() {
         val dir = File(getExternalFilesDir(null), "captures")
-        val files = dir.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() }
+        val files = dir.listFiles()?.filter { it.isFile && it.name.endsWith(".json") && !it.name.startsWith("all_") }
+            ?.sortedBy { it.lastModified() }
         if (files.isNullOrEmpty()) {
             Toast.makeText(this, "还没有抓取到数据，先登录并搜索一次机票", Toast.LENGTH_LONG).show()
             return
         }
-        val latest = files.first()
-        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", latest)
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "application/json"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, latest.name)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            // 合并为一个 JSON 数组：[ {信封1}, {信封2}, ... ]，航班数据在里面（kind=FLIGHT）
+            val sb = StringBuilder("[\n")
+            files.forEachIndexed { i, f ->
+                sb.append(f.readText().trim())
+                if (i != files.lastIndex) sb.append(",\n")
+            }
+            sb.append("\n]")
+            val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val out = File(dir, "all_$ts.json").apply { writeText(sb.toString()) }
+            val flightCount = files.count { it.name.startsWith("FLIGHT_") }
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", out)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, out.name)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(
+                send, "分享全部抓取（共 ${files.size} 条，疑似航班 $flightCount 条）"))
+        } catch (e: Exception) {
+            Toast.makeText(this, "合并失败：${e.message}", Toast.LENGTH_LONG).show()
         }
-        startActivity(Intent.createChooser(send, "分享抓取的航班数据（共 ${files.size} 份）"))
     }
 
     /** 极简 JSON 字符串转义（够用于把任意文本安全嵌入信封） */
