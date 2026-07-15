@@ -267,4 +267,6 @@ export JAVA_HOME="E:\Software\Android\Android Studio\jre"
 cd android && ./gradlew.bat :app:assembleDebug --no-daemon
 ```
 
+**已发布**：`v0.1-android-alpha1`（GitHub Release，prerelease）→ 资产 `CheapestFlight-android-alpha1-arm64.apk`。手机直链下载安装。（注：聊天附件形式的 APK 在手机端无法直接打开安装，须走 Release 链接。）
+
 **下一步**：用户真机安装 → 登录 → 搜一次国际机票 → 顶栏计数 +1 → 分享抓到的 JSON 回传 → 据此回填 §7 数据字段与卡片映射，进入排序/筛选/收藏正式功能开发。
