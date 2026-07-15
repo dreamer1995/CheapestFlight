@@ -61,6 +61,18 @@
 
 **架构含义**：与 EventNote 完全同构——需**用户自己的登录态**。安卓 App 用 **WebView 扫码/密码登录淘宝**取得会话，再加载机票列表页（此时不再跳登录）→ 拦截 `listingsearch` 响应。登录 cookie 存本地私有目录（同 EventNote `cookie.txt` 模式）。这也解释了为何 §3.1 早前纯 requests 匿名调用必被 `RGV587`。
 
+### 3.3 登录后深入验证（2026-07-15，用户已扫码登录 dreamer199506）
+
+用户扫码登录后，用 CDP 接管的真实 Chrome 继续验证，得到三条关键结论：
+
+1. **登录确实解除风控**：直接签名调 `listingsearch` 从 `RGV587`（滑块）变为 `FAIL_SYS_ILLEGAL_ACCESS::非法访问`——即登录态有效，但**该接口不允许被直接调用**。
+2. **真实数据走网关代理**：列表页并不直接请求 `listingsearch`，而是通过 **`mtop.trip.serverless.api.gateway`**（serverless 网关）转发（实测返回 `SUCCESS`）。这解释了为何直连 `listingsearch` 报"非法访问"——正确入口是网关，内层再带 listingsearch 的业务参数。**抓取实现应拦截/复用网关调用，而非直调 listingsearch。**
+3. **移动 H5 列表页在自动化环境下拒绝渲染**：`market.m.taobao.com/app/trip/rx-iflight-eco/pages/listing` 在 Playwright/CDP 自动化下**稳定停在飞猪「抱歉出错了」错误页**（伴随 `outfliggys.m.taobao.com/....fmanifest.json` 的 `ERR_FAILED`），即使登录、伪造 manifest、移动端 UA 模拟均无效——页面有**自动化检测**。而用户的**真实 Chrome 能正常显示航班**。
+
+**由此确定的落地路径**：**放弃在开发机上用自动化抓取**（页面反自动化 + 网关鉴权，成本高且脆）。**改由安卓真机的真实 WebView 抓取**——真实 WebView ≠ 自动化浏览器，行为等同用户的真实 Chrome，能正常渲染并触发网关/`listingsearch` 调用，App 通过 `shouldInterceptRequest`/JS 注入 `XMLHttpRequest`/`fetch` 钩子**拦截响应 JSON**即可。即：字段 schema 的最终确定，推迟到**首版「WebView + 拦截」骨架 App 装到用户手机上跑一次搜索**时完成（§3.2 的解锁方式 a）。
+
+> 开发机上的临时登录 Chrome（throwaway 配置）用完即关，不长期保留用户账号会话。
+
 ---
 
 **（历史记录）风控深入结论（2026-07-15 追加，后被上方「需登录」结论修正）**：
