@@ -374,7 +374,8 @@ python app.py     # 自动开 http://127.0.0.1:8770
 ### 9.4 F1 待补 / 下一步
 
 - **往返（Q6）**：当前 `tripType=0` 单程已通；往返照搬飞猪两步流程（去程列表→选中出返程）待接。
-- **国际线**：城市映射已含国际；`rx-iflight-eco` + `interflight.listingsearch` 路径已就绪，待一次国际实测校字段差异。
+- **⚠️ 国际线（2026-07-16 实测遇阻）**：国内页 `rx-flight-eco` 在登录态自动化下完美渲染；但**国际页 `rx-iflight-eco` 在自动化下稳定报「抱歉出错了」**——根因是其 PHA 容器加载 `outfliggys.m.taobao.com/.../fmanifest.json` 被 **CORS 拦截**（`market.m.taobao.com` 跨域 fetch），国内页无此 manifest（404）故不受影响。已试均无效：① 伪造/② 服务端代理该 manifest 并补 CORS 头、③ 用国内页吃国际航线（只返回推荐位无航班）。真实浏览器/安卓 WebView 不受此限（非自动化）。
+  - **结论**：国际线在 **PC 自动化**下暂时抓不到；**国内线 PC 完全可用**。国际线可行方向：(a) **安卓 App 真实 WebView**（原架构，非自动化，天然可用）；(b) PC「半手动」——后端在可见的驱动 Chrome 里打开搜索首页，用户**真人点选**城市搜索（真实手势 + 容器内导航，可能绕开冷深链 fmanifest 错误），后端拦截 `interflight.listingsearch` 响应。待用户定夺。
 - **礼貌节流 / 反爬升级应对**：请求间隔 + 真遇验证在弹出的 Chrome 里手动过。
 - 之后：**F2 保存的 filter**、**F3 收藏+价格追踪**（引入 `store.py` SQLite）。
 - 安卓端（§7 骨架）复用同一 `parse.py` 与前端，改由 WebView 拦截喂数据（次要，延后）。
