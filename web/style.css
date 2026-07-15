@@ -27,6 +27,8 @@ body { margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-
 .field input { border:1px solid var(--line); background:var(--bg); color:var(--ink);
   border-radius:9px; padding:9px 12px; font-size:15px; min-width:130px; }
 .field input:focus { outline:2px solid var(--brand); border-color:transparent; }
+.field select { border:1px solid var(--line); background:var(--bg); color:var(--ink);
+  border-radius:9px; padding:9px 12px; font-size:14px; }
 .swap { align-self:center; margin-bottom:4px; background:var(--bg); border:1px solid var(--line);
   color:var(--brand); border-radius:50%; width:34px; height:34px; cursor:pointer; font-size:16px; }
 .search { background:linear-gradient(135deg,var(--brand),var(--brand2)); color:#fff; border:0;

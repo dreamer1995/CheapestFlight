@@ -21,7 +21,10 @@ let filter = "all";
   $$(".filt").forEach(b => b.onclick = () => onFilter(b.dataset.f));
   $("#dep").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
   $("#arr").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+  $("#source").onchange = checkLogin;
 })();
+
+function source() { return $("#source").value; }
 
 async function loadCities() {
   try {
@@ -31,8 +34,9 @@ async function loadCities() {
 }
 
 async function checkLogin() {
+  if (source() !== "fliggy") { $("#loginBanner").classList.add("hidden"); return; }
   try {
-    const s = await (await fetch("/api/login-status")).json();
+    const s = await (await fetch("/api/login-status?source=fliggy")).json();
     $("#loginBanner").classList.toggle("hidden", !!s.logged_in);
   } catch (e) { /* 首次浏览器还在起，忽略 */ }
 }
@@ -49,11 +53,14 @@ async function doSearch() {
   const dep = $("#dep").value.trim(), arr = $("#arr").value.trim(), date = $("#date").value;
   if (!dep || !arr || !date) { setStatus("请填写出发地、到达地和日期"); return; }
   $("#searchBtn").disabled = true;
-  setStatus(`<span class="spin"></span>正在驱动登录态浏览器搜索 ${dep} → ${arr} …（约 10–30 秒）`);
+  const tip = source() === "fliggy"
+    ? `正在驱动登录态浏览器搜索 ${dep} → ${arr} …（约 10–30 秒）`
+    : `正在搜索 ${dep} → ${arr} …`;
+  setStatus(`<span class="spin"></span>${tip}`);
   $("#results").innerHTML = "";
   $("#controls").classList.add("hidden");
   try {
-    const q = new URLSearchParams({ dep, arr, date });
+    const q = new URLSearchParams({ dep, arr, date, source: source() });
     const res = await (await fetch("/api/search?" + q)).json();
     if (res.error) { setStatus("❌ " + res.error); return; }
     if (res.login_needed) {

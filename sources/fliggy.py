@@ -24,9 +24,12 @@ CHROME_CHANNEL = os.environ.get("CHEAPESTFLIGHT_CHROME_CHANNEL", "chrome")
 UA_MOBILE = ("Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 "
              "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
 
-# 列表页（移动 H5）：国内 rx-flight-eco，国际 rx-iflight-eco
+# 国内：冷深链到 rx-flight-eco 列表页即可（该页在登录态自动化下正常渲染）
 LISTING_DOMESTIC = "https://market.m.taobao.com/app/trip/rx-flight-eco/pages/listing"
-LISTING_INTL = "https://market.m.taobao.com/app/trip/rx-iflight-eco/pages/listing"
+# 国际：rx-iflight-eco 列表页**冷加载必崩**（PHA 容器 fmanifest 跨域被 CORS 拦）。
+# 必须从搜索首页「容器内导航（SPA 跳转）」进入——预填城市/日期后点「搜索机票」，
+# 页面在已初始化的 PHA 容器里客户端跳转到 rx-iflight-eco，正常渲染并发 interflight.listingsearch。
+SEARCH_HOME = "https://h5.m.taobao.com/trip/traffic-search/search/index.html?defaultBiz=flight"
 LOGIN_URL = "https://login.taobao.com/"
 
 
@@ -159,21 +162,11 @@ class FliggyBrowser:
         return {"opened": True}
 
     def _search(self, ctx, dep_code, arr_code, date, intl, dep_name, arr_name):
-        base = LISTING_INTL if intl else LISTING_DOMESTIC
-        params = {
-            "depCityCode": dep_code, "arrCityCode": arr_code,
-            "depDate": date, "tripType": "0",
-            "depCityName": dep_name or dep_code, "arrCityName": arr_name or arr_code,
-            "_ts": str(int(time.time() * 1000)),
-        }
-        url = base + "?" + urllib.parse.urlencode(params)
-
-        captured = {"best": None, "best_items": -1, "login_needed": False, "raw_data": None}
+        captured = {"best_items": -1, "login_needed": False, "raw_data": None}
 
         def on_resp(resp):
             u = resp.url
             if "listingsearch" not in u:
-                # 顺带侦测登录跳转
                 if "login.taobao.com" in u or "havanaone" in u:
                     captured["login_needed"] = True
                 return
@@ -189,30 +182,69 @@ class FliggyBrowser:
                 captured["login_needed"] = True
                 return
             data = body.get("data") or {}
+            # 只在含航班条目、或 items 更多时更新（避免被推荐位/空响应覆盖）
             items = data.get("items") or []
-            if len(items) > captured["best_items"]:
+            has_flight = any(str(it.get("itemType", "")).startswith("FLIGHT") for it in items)
+            if len(items) > captured["best_items"] and (has_flight or captured["raw_data"] is None):
                 captured["best_items"] = len(items)
                 captured["raw_data"] = data
 
+        # 拦截钩子挂到当前页与后续新开页（国际流程可能同页 SPA 跳转，也可能新开）
+        for pg in ctx.pages:
+            pg.on("response", on_resp)
+        new_pages = []
+
+        def on_page(pg):
+            new_pages.append(pg)
+            pg.on("response", on_resp)
+        ctx.on("page", on_page)
+
         pg = self._a_page(ctx)
-        pg.on("response", on_resp)
         try:
-            pg.goto(url, wait_until="domcontentloaded", timeout=45000)
-            deadline = time.time() + 40
+            if intl:
+                # 国际：搜索首页预填 → 点「搜索机票」→ 容器内导航
+                params = {
+                    "defaultBiz": "flight",
+                    "depCityCode": dep_code, "arrCityCode": arr_code,
+                    "depCityName": dep_name or dep_code, "arrCityName": arr_name or arr_code,
+                    "leaveDate": date,
+                }
+                url = "https://h5.m.taobao.com/trip/traffic-search/search/index.html?" + urllib.parse.urlencode(params)
+                pg.goto(url, wait_until="domcontentloaded", timeout=45000)
+                pg.wait_for_timeout(3500)
+                try:
+                    pg.get_by_text("搜索机票", exact=False).first.click(timeout=8000)
+                except Exception:
+                    pass
+            else:
+                # 国内：冷深链列表页
+                params = {
+                    "depCityCode": dep_code, "arrCityCode": arr_code,
+                    "depDate": date, "tripType": "0",
+                    "depCityName": dep_name or dep_code, "arrCityName": arr_name or arr_code,
+                    "_ts": str(int(time.time() * 1000)),
+                }
+                url = LISTING_DOMESTIC + "?" + urllib.parse.urlencode(params)
+                pg.goto(url, wait_until="domcontentloaded", timeout=45000)
+
+            deadline = time.time() + 45
             while time.time() < deadline:
                 pg.wait_for_timeout(1200)
                 data = captured["raw_data"]
-                if data is not None:
-                    # 有结果且不再需要续拉就停
-                    if not data.get("needContinue") and parse_listingsearch(data):
-                        break
-                if captured["login_needed"]:
+                if data is not None and parse_listingsearch(data) and not data.get("needContinue"):
+                    break
+                if captured["login_needed"] and captured["raw_data"] is None:
                     break
         finally:
             try:
-                pg.remove_listener("response", on_resp)
+                ctx.remove_listener("page", on_page)
             except Exception:
                 pass
+            for p in list(ctx.pages):
+                try:
+                    p.remove_listener("response", on_resp)
+                except Exception:
+                    pass
 
         if captured["login_needed"] and captured["raw_data"] is None:
             return {"login_needed": True, "flights": [], "lowestPrice": None}
