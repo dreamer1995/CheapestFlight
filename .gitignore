@@ -10,6 +10,9 @@ android/app/*.iml
 # Scratch / captures
 captures/
 
+# 抓取的飞猪响应样本（含登录态下的第三方商业数据/内部标识）只留本地，不入公开仓库
+samples/
+
 # OS
 Thumbs.db
 .DS_Store

@@ -94,7 +94,7 @@
 
 **已决（2026-07-15）**：采用方案 2（安卓优先 + WebView 拦截）。
 
-### 3.2 待办：捕获一次真实 listingsearch 响应以定字段
+### 3.2 ✅ 已完成（2026-07-15）：捕获一次真实 listingsearch 响应以定字段 —— 见 §8
 
 飞猪列表卡片由**服务端动态 UI 模板（DinamicX）**下发，字段结构**无法从页面 JS 反推**，`items` 内部 schema 必须靠**一次真实响应**确定。当前本机网络被风控，拿不到。**解锁任一即可**：
 - (a) 用户在**安卓真机**装上首版「WebView + 拦截」骨架 App，跑一次搜索，把拦截到的 `listingsearch` 响应 JSON 回传（真机真实国内网络可自动过反爬）；
@@ -269,4 +269,63 @@ cd android && ./gradlew.bat :app:assembleDebug --no-daemon
 
 **已发布**：`v0.1-android-alpha1`（GitHub Release，prerelease）→ 资产 `CheapestFlight-android-alpha1-arm64.apk`。手机直链下载安装。（注：聊天附件形式的 APK 在手机端无法直接打开安装，须走 Release 链接。）
 
-**下一步**：用户真机安装 → 登录 → 搜一次国际机票 → 顶栏计数 +1 → 分享抓到的 JSON 回传 → 据此回填 §7 数据字段与卡片映射，进入排序/筛选/收藏正式功能开发。
+**迭代**：alpha1（分享最新一条）→ **alpha2**（抓取放宽到所有 `mtop.trip.*`、按内容标记疑似航班 `FLIGHT`、「分享」合并本次全部抓取为单文件）。**alpha2 真机跑通并回传数据成功**（2026-07-15，见 §8）。
+
+---
+
+## 8. ⭐ 飞猪航班响应字段结构（2026-07-15 真机捕获确定，§3.2 待办完成）
+
+用户 alpha2 真机搜索「北京→杭州 2026-07-16」，回传 26 条抓取合并文件，其中航班列表来自 **`mtop.trip.flight.listingsearch`**（国内；国际为 **`mtop.trip.interflight.listingsearch` v2.3**，结构同族）。样本存档：[samples/fliggy_listingsearch_sample.json](samples/fliggy_listingsearch_sample.json)（精简）、[samples/fliggy_listingsearch_full_raw.json](samples/fliggy_listingsearch_full_raw.json)（完整原始）。
+
+### 8.1 响应骨架
+
+```
+data
+├─ lowestPrice            # 该航线最低价（元），用于「最低 ¥N」提示
+├─ sorts                  # 服务端排序项（见 8.4）
+├─ updateFilters[]        # 服务端筛选项（见 8.4）
+└─ items[]                # 列表条目，按 itemType 区分：
+   ├─ itemType=FLIGHT_DIRECT     # 直飞航班（data[] 为航班卡片数组）
+   ├─ itemType=FLIGHT_TRANSFER   # 中转航班（data[] 为航班卡片数组）
+   ├─ itemType=TOP_MULTI_TAB / ECONOMY_RECOMMEND / TITLE / LOW_PRICE_MONITOR  # 非航班，UI 装饰/推荐，渲染时跳过
+```
+
+> **直飞/中转判定**：外层 `item.itemType`（`FLIGHT_DIRECT` / `FLIGHT_TRANSFER`），或卡片内 `flightInfos[0].transferCount`（0=直飞）/ `routeType`（1=直飞，2=中转）。
+
+### 8.2 航班卡片字段（`items[].data[]` 每个元素）
+
+| 卡片需要 | 取值路径 | 样本值 / 说明 |
+| --- | --- | --- |
+| 航班号 | `trackInfo.flightNos` 或 `flightInfos[0].flightSegments[].marketingFlightNo` | `HU7377`（中转为多段拼接，如 `CA8623` + `CA1782`） |
+| 航司名 | `flightInfos[0].flightSegments[].marketingAirlineName` | `海航｜吉祥航空`、`国航` |
+| 航司图标 | `…flightSegments[].marketingAirlineIconUrl` | `//gw.alicdn.com/...png` |
+| 机型 | `…flightSegments[].planeType` | `窄体机` |
+| 起飞机场 | `flightInfos[0].depAirportName`(+`depTerm`) / `depAirportCode` / `depAirportShortName` | `首都`+`T2` / `PEK` / `首都` |
+| 到达机场 | `flightInfos[0].arrAirportName`(+`arrTerm`) / `arrAirportCode` / `arrAirportShortName` | `萧山`+`T3` / `HGH` / `萧山` |
+| 起飞时间 | `flightInfos[0].depTime` | `2026-07-16 22:05:00` |
+| 到达时间 | `flightInfos[0].arrTime` | `2026-07-17 00:25:00` |
+| 跨天标记 | `…flightSegments[].arrSpanDays` 或 比较 dep/arrTime 日期 | `+1天` |
+| **总耗时** | `flightInfos[0].duration` | **分钟**（`140`=2h20m；中转含中转等待，如 `915`=15h15m） |
+| 中转次数 | `flightInfos[0].transferCount` / `stopQuantity` | `0` 直飞 / `1` 中转 |
+| 中转地 | 中转卡片 `flightSegments[0].arrCityName`（第一段落地城市） | `运城` |
+| **价格** | `priceInfo.adultPrice`（**分**，÷100=元）；或 `trackInfo.salePrice`（已是元） | `89500`→¥895；含税总价 `adultTotalPrice`=104500→¥1045 |
+| 促销价 | `priceInfo.afterPromotionPrice`（分） / `trackInfo.afterPromotionPrice`（元） | ¥893 |
+| 税 | `priceInfo.adultTax`（分） / `trackInfo.tax`（元） | ¥150 |
+| （购买跳转/内部） | `troubleshoot`(fareIds/agentId 等)、`redirectParam.buyParam` | 收藏标识与后续下单用 |
+
+### 8.3 中转结构
+
+中转卡片 `flightInfos[0]`：`transferCount=1`、`routeType=2`、`flightSegments[]` 含**多段**（每段独立航班号/航司/起降），`duration` 为**含中转等待的总时长**。中转地 = 前一段 `arrCityName`（=后一段 `depCityName`）。样本：北京 07:40 →(运城中转)→ 杭州 22:55，总 915 分钟。
+
+### 8.4 飞猪自带排序/筛选 vs 本项目 F1
+
+- **服务端排序**（`data.sorts`）：仅 `priceSorts`（`TOTAL_PRICE_ASC/DESC`）+ `timeSorts`（`DEP_ASC/DESC` 起飞早晚）。
+- **本项目 F1 四种排序**：出发时间、价格→可用服务端；**到达时间、飞行时间→本地排序**（`arrTime`、`duration` 字段现成，前端算即可）。结论：**四种排序全部可实现**，且一次搜索返回的字段已足够，无需服务端支持到达/耗时排序。
+- **服务端筛选**（`data.updateFilters[]` 的 `factor`）：`quickCheck`(含 `onlyDirect`)、`flightPreference`(`onlyDirect`/`NO_CODE_SHARE`)、`airline`、`airport`、`times`(起飞时段 range 0-24)、`cabin`、`equipTypes`。
+- **本项目 F1 直飞/中转筛选**：用 `onlyDirect` 或本地按 `itemType`/`transferCount` 过滤即可。
+
+### 8.5 结论
+
+**F1 卡片 + 四种排序 + 直飞/中转筛选，全部可由单次 `listingsearch` 响应实现**。价格单位为分需 ÷100；耗时为分钟；直飞/中转看 `itemType`。国际线待后续捕获一次 `interflight.listingsearch` 确认差异（结构同族，预计仅多币种/中转更多）。
+
+**下一步**：进入正式功能开发——按 §8 字段做前端卡片渲染 + 四种排序 + 直飞/中转筛选（F1），再叠加 F2 保存 filter、F3 收藏+价格追踪。抓取层复用「WebView 拦截 listingsearch 响应」这套已验证机制。
